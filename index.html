@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en" data-owner="wiktorlaskowski" data-repo="Wiktor-s-new-privacy-policy-pages" data-branch="initial">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Privacy Policies</title>
+  <style>
+    :root { --maxw: 1000px; --gap: 16px; --radius: 10px; --shadow: 0 1px 3px rgba(0,0,0,.08), 0 6px 20px rgba(0,0,0,.06); }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Arial, sans-serif; color: #111; background: #fafafa; }
+    header { background: #fff; border-bottom: 1px solid #e6e6e6; }
+    .wrap { max-width: var(--maxw); margin: 0 auto; padding: 24px; }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    .toolbar { display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+    .search { flex: 1 1 280px; display: flex; align-items: center; background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 8px 10px; gap: 8px; }
+    .search input { width: 100%; border: 0; outline: none; background: transparent; font-size: 16px; }
+    .pill { display: inline-block; border: 1px solid #ddd; border-radius: 999px; padding: 2px 8px; font-size: 12px; color: #555; background: #fff; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px,1fr)); gap: var(--gap); margin-top: 20px; }
+    .tile { display: block; background: #fff; border: 1px solid #e8e8e8; border-radius: var(--radius); padding: 16px; text-decoration: none; color: inherit; box-shadow: var(--shadow); transition: transform .06s, box-shadow .06s, border-color .06s; }
+    .tile:hover, .tile:focus { border-color: #d0d0d0; transform: translateY(-1px); outline: none; }
+    .tile h3 { margin: 0 0 6px; font-size: 18px; line-height: 1.3; word-break: break-word; }
+    .tile .meta { font-size: 13px; color: #666; margin-top: 6px; }
+    .empty, .error { background: #fff; border: 1px dashed #ccc; border-radius: var(--radius); padding: 20px; margin-top: 20px; color: #444; }
+    footer { margin-top: 40px; color: #777; font-size: 13px; }
+    code { background: #f2f2f2; padding: 2px 6px; border-radius: 6px; border: 1px solid #e6e6e6; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>Privacy Policies</h1>
+      <div class="toolbar">
+        <label class="search" aria-label="Search privacy files"><input id="q" type="search" placeholder="Search by title or filename..."></label>
+        <span id="count" class="pill" aria-live="polite"></span>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div id="grid" class="grid" aria-live="polite"></div>
+    <div id="empty" class="empty" hidden>No matching files.</div>
+    <div id="error" class="error" hidden></div>
+    <footer>
+      <p>This page links directly to raw files. Jekyll is not required.</p>
+    </footer>
+  </main>
+
+  <script>
+  (function() {
+    const elGrid = document.getElementById("grid");
+    const elQ = document.getElementById("q");
+    const elCount = document.getElementById("count");
+    const elEmpty = document.getElementById("empty");
+    const elError = document.getElementById("error");
+
+    const htmlTag = document.documentElement;
+    const CFG = {
+      owner: (htmlTag.dataset.owner || "").trim(),
+      repo: (htmlTag.dataset.repo || "").trim(),
+      branch: (htmlTag.dataset.branch || "main").trim()
+    };
+    if (!CFG.owner || !CFG.repo) {
+      showError("Missing repo configuration. Set data-owner and data-repo on <html>.");
+      return;
+    }
+
+    main().catch(e => showError(e && e.message ? e.message : String(e)));
+
+    async function main() {
+      const files = await listDirectory(CFG.owner, CFG.repo, CFG.branch, "privacy");
+      const models = files.filter(f => f.type === "file").map(f => ({
+        name: f.name,
+        path: f.path,
+        size: f.size,
+        download_url: f.download_url,  // raw.githubusercontent.com link
+        title: toTitle(f.name)
+      }));
+      render(models);
+
+      // Search filter
+      elQ.addEventListener("input", () => {
+        const q = elQ.value.trim().toLowerCase();
+        let visible = 0;
+        for (const tile of elGrid.querySelectorAll(".tile")) {
+          const hay = (tile.dataset.title + " " + tile.dataset.name).toLowerCase();
+          const hit = !q || hay.includes(q);
+          tile.hidden = !hit;
+          if (hit) visible++;
+        }
+        elEmpty.hidden = visible !== 0;
+        elCount.textContent = visible + " " + (visible === 1 ? "file" : "files");
+      });
+      elCount.textContent = models.length + " " + (models.length === 1 ? "file" : "files");
+    }
+
+    function render(models) {
+      if (!models.length) {
+        elEmpty.hidden = false;
+        elCount.textContent = "0 files";
+      }
+      elGrid.innerHTML = models.map(m => {
+        return (
+          '<a class="tile" href="' + escapeHtml(m.download_url) + '" target="_blank" rel="noopener" ' +
+          'data-title="' + escapeHtml(m.title) + '" data-name="' + escapeHtml(m.name) + '">' +
+            "<h3>" + escapeHtml(m.title) + "</h3>" +
+            '<div class="meta">' + escapeHtml(m.name) + "</div>" +
+          "</a>"
+        );
+      }).join("");
+    }
+
+    async function listDirectory(owner, repo, branch, dir) {
+      const url = "https://api.github.com/repos/" + encodeURIComponent(owner) + "/" +
+                  encodeURIComponent(repo) + "/contents/" + encodeURIComponent(dir) +
+                  (branch ? ("?ref=" + encodeURIComponent(branch)) : "");
+      const res = await fetch(url, { headers: { "Accept": "application/vnd.github+json" } });
+      if (res.status === 404) return [];
+      if (!res.ok) throw new Error("GitHub API error listing /" + dir + ": " + res.status + " " + res.statusText);
+      return res.json();
+    }
+
+    function toTitle(filename) {
+      const stem = filename.replace(/\.[^.]+$/, "");
+      return stem.replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim().replace(/\b\w/g, c => c.toUpperCase());
+    }
+    function escapeHtml(s) {
+      return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+    }
+    function showError(msg) { elError.hidden = false; elError.textContent = msg; }
+  })();
+  </script>
+</body>
+</html>
