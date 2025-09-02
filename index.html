@@ -41,7 +41,7 @@
     <div id="empty" class="empty" hidden>No matching files.</div>
     <div id="error" class="error" hidden></div>
     <footer>
-      <p>This page links directly to raw files. Jekyll is not required.</p>
+      <p>Links point to your GitHub Pages site under /privacy. No Jekyll is required.</p>
     </footer>
   </main>
 
@@ -64,6 +64,18 @@
       return;
     }
 
+    // Compute the site base path so links stay on the GitHub Pages domain.
+    // user.github.io => basePath ""
+    // user.github.io/repo => basePath "/repo"
+    // custom domain => basePath ""
+    function basePath() {
+      const segs = location.pathname.split("/").filter(Boolean);
+      if (location.hostname.endsWith(".github.io")) {
+        return segs.length >= 1 ? ("/" + segs[0]) : "";
+      }
+      return "";
+    }
+
     main().catch(e => showError(e && e.message ? e.message : String(e)));
 
     async function main() {
@@ -72,8 +84,9 @@
         name: f.name,
         path: f.path,
         size: f.size,
-        download_url: f.download_url,  // raw.githubusercontent.com link
-        title: toTitle(f.name)
+        title: toTitle(f.name),
+        // Always link to the file path on the Pages site
+        href: basePath() + "/privacy/" + encodeURIComponent(f.name)
       }));
       render(models);
 
@@ -100,7 +113,7 @@
       }
       elGrid.innerHTML = models.map(m => {
         return (
-          '<a class="tile" href="' + escapeHtml(m.download_url) + '" target="_blank" rel="noopener" ' +
+          '<a class="tile" href="' + escapeHtml(m.href) + '" ' +
           'data-title="' + escapeHtml(m.title) + '" data-name="' + escapeHtml(m.name) + '">' +
             "<h3>" + escapeHtml(m.title) + "</h3>" +
             '<div class="meta">' + escapeHtml(m.name) + "</div>" +
